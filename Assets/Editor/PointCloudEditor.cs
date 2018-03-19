@@ -21,7 +21,7 @@ public class PointCloudEditor : Editor {
 		}
 		GUILayout.Label("Modifying", EditorStyles.boldLabel);
 		if(GUILayout.Button("Displace")) {
-			script.Displace();
+			//script.Displace();
 		}
 		GUILayout.Label("Exporting", EditorStyles.boldLabel);
 		if(GUILayout.Button("Export")) {

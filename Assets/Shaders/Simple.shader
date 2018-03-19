@@ -1,52 +1,41 @@
-﻿Shader "Unlit/Simple"
+﻿hader "Unlit/Simple"
 {
 	Properties
 	{
-		_MainTex ("Texture", 2D) = "white" {}
+		_Color("Main Color (A=Opacity)", Color) = (1,1,1,1)
+		_MainTex("Base (A=Opacity)", 2D) = ""
 	}
-	SubShader
-	{
-		Tags { "Queue"="AlphaTest" "RenderType"="Transparent" "IgnoreProjector"="True" }
-		Blend One OneMinusSrcAlpha
-		AlphaToMask On
-		Cull Off
 
-		Pass
-		{
-			CGPROGRAM
-			#pragma vertex vert
-			#pragma fragment frag
-			
-			#include "UnityCG.cginc"
+		Category{
+		Tags{ "Queue" = "Transparent" "IgnoreProjector" = "True" }
+		ZWrite Off
+		Blend SrcAlpha OneMinusSrcAlpha
 
-			sampler2D _MainTex;
-			float4 _MainTex_ST;
+		SubShader{ Pass{
+		GLSLPROGRAM
+		varying mediump vec2 uv;
 
-			struct v2f
-			{
-				float4 vertex : SV_POSITION;
-				float4 color : COLOR;
-				float3 normal : NORMAL;
-				float2 texcoord : TEXCOORD0;
-			};
-			
-			v2f vert (appdata_full v)
-			{
-				v2f o;
-				float4 vertex = mul(unity_ObjectToWorld, v.vertex);
-				o.vertex = mul(UNITY_MATRIX_VP, vertex);
-				o.texcoord = TRANSFORM_TEX(v.texcoord, _MainTex);
-				o.color = v.color;
-				o.normal = v.normal;
-				return o;
-			}
-			
-			fixed4 frag (v2f i) : SV_Target
-			{
-				fixed4 color = tex2D(_MainTex, i.texcoord);
-				return color;
-			}
-			ENDCG
-		}
+#ifdef VERTEX
+	uniform mediump vec4 _MainTex_ST;
+	void main() {
+		gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
+		uv = gl_MultiTexCoord0.xy * _MainTex_ST.xy + _MainTex_ST.zw;
 	}
+#endif
+
+#ifdef FRAGMENT
+	uniform lowp sampler2D _MainTex;
+	uniform lowp vec4 _Color;
+	void main() {
+		gl_FragColor = texture2D(_MainTex, uv) * _Color;
+	}
+#endif     
+	ENDGLSL
+	} }
+
+		SubShader{ Pass{
+		SetTexture[_MainTex]{ Combine texture * constant ConstantColor[_Color] }
+	} }
+	}
+
 }

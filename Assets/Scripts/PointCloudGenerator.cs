@@ -5,17 +5,20 @@ using UnityEngine;
 
 namespace PointCloudExporter
 {
+    [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
 	public class PointCloudGenerator : MonoBehaviour
 	{
 		[Header("Point Cloud")]
 		public string fileName = "Simon2";
-		public int maximumVertices = 100000;
+		public int maximumVertices = 60000;
 
-		[Header("Renderer")]
-		public float size = 0.1f;
+        [Header("Renderer")]
+        public float size = 1;
+        public float scale;
 		public Texture sprite;
 		public Shader shader;
 
+        /*
 		[Header("Displace")]
 		[Range(0,1)] public float should = 0.5f;
 		public float time = 1f;
@@ -25,13 +28,15 @@ namespace PointCloudExporter
 		public float targetSpeed = 1f;
 		[Range(0,1)] public float noisy = 0.1f;
 		public Transform targetDisplace;
+        */
 
 		[Header("Baking")]
-		public int details = 32;
-		public int circleRadius = 32;
+		public int details = 1;
+		public int circleRadius = 1;
 		public Shader shaderBaked;
 
-		private MeshInfos points;
+        private Vector3[] points;
+		//private MeshInfos points;
 		private const int verticesMax = 64998;
 		private Material material;
 		private Material materialBaked;
@@ -47,46 +52,74 @@ namespace PointCloudExporter
 		
 		void Update ()
 		{
-			material.SetFloat("_Size", size);
-			material.SetTexture("_MainTex", sprite);
+			//material.SetFloat("_Size", size);
+			//material.SetTexture("_MainTex", sprite);
 
-			if (displaceFiredAt + time > Time.time) {
-				Displace(Time.deltaTime);
-			}
+			//if (displaceFiredAt + time > Time.time) {
+			//	Displace(Time.deltaTime);
+			//}
 		}
 
-		public MeshInfos LoadPointCloud ()
+		public CloudFrame LoadPointCloud ()
 		{
-			string filePath = System.IO.Path.Combine(Application.streamingAssetsPath, fileName) + ".ply";
-			return SimpleImporter.Instance.Load(filePath, maximumVertices);
+            string filePath = "testc.pcm"; //System.IO.Path.Combine(Application.streamingAssetsPath, fileName) + ".ply";
+
+            return importfile.openPicture("test.pcm").GetCloudFrame(0);
+
+            //return SimpleImporter.Instance.Load(filePath, maximumVertices);
 		}
 
 		public void Generate ()
 		{
-			points = LoadPointCloud();
+			CloudFrame frame = LoadPointCloud();
+
+            //Vector3[] points = frame.GetpointCloud();
+            //Color[] colors = frame.GetColorCloud();
+
+            //Generate(points, colors);
 			material = new Material(shader);
-			Generate(points, material, MeshTopology.Points);
+			Generate(frame, material, MeshTopology.Points);
 		}
+
+        private void Generate(Vector3[] points, Color[] colors)
+        {
+            Mesh mesh = new Mesh();
+            GetComponent<MeshFilter>().mesh = mesh;
+
+            int[] indecies = new int[points.Length];
+
+            for(int i = 0; i<points.Length; i++)
+            {
+                indecies[i] = i;
+            }
+
+            mesh.vertices = points;
+            mesh.colors = colors;
+
+            mesh.SetIndices(indecies, MeshTopology.Points, 0);
+            Debug.Log(mesh.vertices.Length.ToString());
+        }
 
 		public void Export ()
 		{
-			MeshInfos triangles = GetTriangles(points, size);
+			//MeshInfos triangles = GetTriangles(points, size);
 			materialBaked = new Material(shaderBaked);
-			Generate(triangles, materialBaked, MeshTopology.Triangles);
-			materialBaked.SetTexture("_MainTex", GetBakedColors(triangles));
+			//Generate(triangles, materialBaked, MeshTopology.Triangles);
+			//materialBaked.SetTexture("_MainTex", GetBakedColors(triangles));
 		}
 
-		public void Generate (MeshInfos meshInfos, Material materialToApply, MeshTopology topology)
+        public void Generate(CloudFrame frame, Material materialToApply, MeshTopology topology)
 		{
-
+            //deletes all previous mesh
 			for (int c = transform.childCount - 1; c >= 0; --c) {
 				Transform child = transform.GetChild(c);
 				GameObject.DestroyImmediate(child.gameObject);
 			}
 
-			int vertexCount = meshInfos.vertexCount;
+            int vertexCount = frame.getVertexCount();
 			int meshCount = (int)Mathf.Ceil(vertexCount / (float)verticesMax);
 
+            //we may need to split the mesh into multiple meshes
 			meshArray = new Mesh[meshCount];
 			transformArray = new Transform[meshCount];
 
@@ -96,6 +129,7 @@ namespace PointCloudExporter
 
 			int resolution = GetNearestPowerOfTwo(Mathf.Sqrt(vertexCount));
 
+            //create all the submeshes
 			while (meshIndex < meshCount) {
 
 				int count = verticesMax;
@@ -105,9 +139,11 @@ namespace PointCloudExporter
 					count = vertexCount % verticesMax;
 				}
 				
-				Vector3[] subVertices = meshInfos.vertices.Skip(meshIndex * verticesMax).Take(count).ToArray();
-				Vector3[] subNormals = meshInfos.normals.Skip(meshIndex * verticesMax).Take(count).ToArray();
-				Color[] subColors = meshInfos.colors.Skip(meshIndex * verticesMax).Take(count).ToArray();
+                Vector3[] subVertices = frame.GetpointCloud(0.01f).Skip(meshIndex * verticesMax).Take(count).ToArray();
+                Color[] subColors = frame.GetColorCloud().Skip(meshIndex * verticesMax).Take(count).ToArray();
+                //Vector3[] subVertices = meshInfos.vertices.Skip(meshIndex * verticesMax).Take(count).ToArray();
+				//Vector3[] subNormals = meshInfos.normals.Skip(meshIndex * verticesMax).Take(count).ToArray();
+				//Color[] subColors = meshInfos.colors.Skip(meshIndex * verticesMax).Take(count).ToArray();
 				int[] subIndices = new int[count];
 				for (int i = 0; i < count; ++i) {
 					subIndices[i] = i;
@@ -116,7 +152,7 @@ namespace PointCloudExporter
 				Mesh mesh = new Mesh();
 				mesh.bounds = new Bounds(Vector3.zero, Vector3.one * 100f);
 				mesh.vertices = subVertices;
-				mesh.normals = subNormals;
+				//mesh.normals = subNormals;
 				mesh.colors = subColors;
 				mesh.SetIndices(subIndices, topology, 0);
 
@@ -138,7 +174,8 @@ namespace PointCloudExporter
 				++meshIndex;
 			}
 		}
-
+        
+        /*
 		public void Displace ()
 		{
 			displaceFiredAt = Time.time;
@@ -178,6 +215,7 @@ namespace PointCloudExporter
 				mesh.vertices = vertices;
 			}
 		}
+        */
 
 		public void Reset ()
 		{
@@ -186,7 +224,7 @@ namespace PointCloudExporter
 				Mesh mesh = meshArray[meshIndex];
 				Vector3[] vertices = mesh.vertices;
 				for (int vertexIndex = 0; vertexIndex < vertices.Length; ++vertexIndex) {
-					vertices[vertexIndex] = points.vertices[meshInfosIndex];
+					//vertices[vertexIndex] = points.vertices[meshInfosIndex];
 					++meshInfosIndex;
 				}
 				mesh.vertices = vertices;
@@ -209,7 +247,7 @@ namespace PointCloudExporter
 			meshGameObject.transform.parent = parent;
 			meshGameObject.transform.localPosition = Vector3.zero;
 			meshGameObject.transform.localRotation = Quaternion.identity;
-			meshGameObject.transform.localScale = Vector3.one;
+			meshGameObject.transform.localScale = new Vector3(1, 1, 1);
 			return meshGameObject;
 		}
 
